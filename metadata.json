@@ -1,0 +1,6 @@
+{
+  "name": "Somali Text to Speech",
+  "description": "Convert Somali text to human-like speech using advanced Gemini TTS model.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
