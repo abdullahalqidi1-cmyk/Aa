@@ -45,25 +45,46 @@ app.post("/api/tts", async (req, res) => {
     // Map tones or instructions
     let instruction = "";
     if (tone === "cheerful") {
-      instruction = "Ku dhawaaq si farxad iyo kalsooni ku jirto: ";
-    } else if (tone === "formal") {
-      instruction = "Ku dhawaaq si rasmi ah iyo si deggan: ";
-    } else if (tone === "slow") {
-      instruction = "Ku dhawaaq si tartiib tartiib ah oo cad: ";
+      instruction = "Ku dhawaaq si farxad, dhoola-caddayn, iyo kalsooni badan ku jirto (Safar xamaasad leh / شريط مبهج وسعيد): ";
+    } else if (tone === "sad") {
+      instruction = "Ku dhawaaq si murugo leh, durnaan leh, oo qiiro gashay (Murugo / حزين وشجي): ";
+    } else if (tone === "angry") {
+      instruction = "Ku dhawaaq si aad u cadhaysan, kulul, oo qaylo/xanaaq ku jiro (Xanaaq / غاضب ومنفعل): ";
     } else if (tone === "excited") {
-      instruction = "Ku dhawaaq si xamaasad leh: ";
+      instruction = "Ku dhawaaq si aad u xamaasad leh, oo qaylo iyo firfircooni badan ku jirto (Xamaasad / متحمس ومشجع): ";
+    } else if (tone === "calm") {
+      instruction = "Ku dhawaaq si aad u deggen, cod hoose oo naxariis iyo nabad leh (Deggan / هادئ ولطيف): ";
+    } else if (tone === "scared") {
+      instruction = "Ku dhawaaq si cabsi leh, gariiraya, oo argagax ku jiro (Cabsan / خائف ومذعور): ";
+    } else if (tone === "formal") {
+      instruction = "Ku dhawaaq si rasmi ah, oo go'aansan sidii akhristaha wararka (Rami ah / أسلوب رسمي وقور): ";
     } else if (tone === "instructional") {
       instruction = "Ku dhawaaq si macallinnimo iyo caddaan ah: ";
+    } else if (tone === "slow") {
+      instruction = "Ku dhawaaq si tartiib tartiib ah oo cad: ";
     } else {
       instruction = "U akhri text-kan si dabiici ah oo sax ah oo Af-Soomaali ah: ";
     }
 
     // Add speed instructions to prompt if adjusted
     let speedInWord = "";
-    if (speed === "slow") {
-      speedInWord = " (Fadlan si tartiib ah u hadal).";
-    } else if (speed === "fast") {
-      speedInWord = " (Fadlan si degdeg ah u hadal).";
+    if (typeof speed === "number" || (!isNaN(Number(speed)) && speed !== "")) {
+      const speedNum = Number(speed);
+      if (speedNum <= 0.65) {
+        speedInWord = " (Fadlan u hadal si aad iyo aad u tartiib ah, si ka gaabis ah xawaaraha caadiga ah / تحدث ببطء شديد للغاية).";
+      } else if (speedNum < 0.9) {
+        speedInWord = " (Fadlan u hadal si tartiib ah / تحدث ببطء).";
+      } else if (speedNum >= 1.4) {
+        speedInWord = " (Fadlan u hadal si aad u degdeg ah / تحدث بسرعة فائقة وعالية).";
+      } else if (speedNum > 1.1) {
+        speedInWord = " (Fadlan u hadal si degdeg ah / تحدث بسرعة).";
+      }
+    } else {
+      if (speed === "slow") {
+        speedInWord = " (Fadlan si tartiib ah u hadal).";
+      } else if (speed === "fast") {
+        speedInWord = " (Fadlan si degdeg ah u hadal).";
+      }
     }
 
     const fullPrompt = `${instruction}"${text}"${speedInWord}`;

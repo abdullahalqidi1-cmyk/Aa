@@ -61,12 +61,23 @@ const CATEGORIES = [
   { id: "travel", name: "Socdaal / سفر وتنقل" }
 ];
 
+const EMOTIONS = [
+  { id: "natural", label: "Dabiici / طبيعي", desc: "😊 Ku hadlid caadi ah", emoji: "😊" },
+  { id: "cheerful", label: "Faraxsan / مبهج", desc: "🎉 Cod farxad leh", emoji: "🎉" },
+  { id: "calm", label: "Deggan / هادئ", desc: "😌 Cod jilicsan oo deggen", emoji: "😌" },
+  { id: "excited", label: "Xamaasad / متحمس", desc: "🔥 Cod garasho iyo xamaasad", emoji: "🔥" },
+  { id: "sad", label: "Murugo / حزين", desc: "😢 Cod murugo iyo qiiro gashay", emoji: "😢" },
+  { id: "angry", label: "Xanaaq / غاضب", desc: "😠 Cod kulul oo cadho leh", emoji: "😠" },
+  { id: "scared", label: "Cabsan / خائف", desc: "😰 Cod gariiraya oo baqdin leh", emoji: "😰" },
+  { id: "formal", label: "Rami ah / رسمي", desc: "💼 Codka akhriska rasmiga ah", emoji: "💼" }
+];
+
 export default function App() {
   const [text, setText] = useState<string>("Ku soo dhowow adduunka codka dabiiciga ah ee Af-Soomaaliga!");
   const [selectedVoice, setSelectedVoice] = useState<string>("Puck");
   const [selectedGender, setSelectedGender] = useState<"all" | "male" | "female">("male");
   const [tone, setTone] = useState<string>("natural");
-  const [speed, setSpeed] = useState<string>("normal");
+  const [speed, setSpeed] = useState<number | string>(1.0);
   const [activeCategory, setActiveCategory] = useState<string>("all");
   
   const [loading, setLoading] = useState<boolean>(false);
@@ -94,10 +105,44 @@ export default function App() {
     }
   }, []);
 
-  // Sync history with localStorage
+  // Sync history with localStorage safely and avoid storage quota limit issues
   const saveHistory = (newHistory: TTSHistoryItem[]) => {
-    setHistory(newHistory);
-    localStorage.setItem("somali_tts_history", JSON.stringify(newHistory));
+    // Limit history to 20 items max
+    const trimmedHistory = newHistory.slice(0, 20);
+    setHistory(trimmedHistory);
+    
+    let currentData = [...trimmedHistory];
+    
+    // Attempt progressive reduction of size inside localStorage when quota starts to fill up
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        localStorage.setItem("somali_tts_history", JSON.stringify(currentData));
+        return; // Saved successfully!
+      } catch (err) {
+        console.warn(`LocalStorage quota exceeded (attempt ${attempt + 1}), reducing audio payloads...`, err);
+        
+        if (attempt === 0) {
+          // Keep audio cache for ONLY the most recent 3 items, clear for older ones
+          currentData = currentData.map((item, idx) => 
+            idx < 3 ? item : { ...item, audioBase64: "" }
+          );
+        } else if (attempt === 1) {
+          // Keep audio cache for ONLY the absolute most recent item
+          currentData = currentData.map((item, idx) => 
+            idx < 1 ? item : { ...item, audioBase64: "" }
+          );
+        } else if (attempt === 2) {
+          // Strip audio metadata cache completely, keep only the text option history items
+          currentData = currentData.map(item => ({ ...item, audioBase64: "" }));
+        } else {
+          // Last resort: clear history completely in localStorage
+          try {
+            localStorage.removeItem("somali_tts_history");
+          } catch (e) {}
+          return;
+        }
+      }
+    }
   };
 
   // Convert Base64 PCM to standard playable WAV Blob URL
@@ -238,6 +283,16 @@ export default function App() {
       audioRef.current.pause();
     }
 
+    if (!item.audioBase64) {
+      // If the audio isn't cached (reduced to save storage limit), load text & settings
+      setText(item.text);
+      if (item.voice) setSelectedVoice(item.voice);
+      if (item.tone) setTone(item.tone);
+      if (item.speed) setSpeed(item.speed);
+      setError("Kaydka dibadda ee codkan waa la saaray si booska browser-ka loo badbaadiyo. Waxaan u wareejinay qoraalkii iyo habayntii sanduuqa sare, fadlan mar kale riix 'Abuur Codka' si aad u dhagaysato. / تم إزالة هذا التسجيل لتوفير مساحة في المتصفح. يمكنك توليده مجدداً بضغطة زر.");
+      return;
+    }
+
     try {
       const wavUrl = getWavUrlFromBase64(item.audioBase64);
       setCurrentAudioUrl(wavUrl);
@@ -261,6 +316,10 @@ export default function App() {
 
   // Download Audio
   const handleDownload = (base64: string, filename = "somali_voice.wav") => {
+    if (!base64) {
+      setError("Codsiga lama soo dejin karo waayo kaydka ayaa la tirtiray si loo badbaadiyo booska. Fadlan mar kale sii daa abuurista.");
+      return;
+    }
     const wavUrl = getWavUrlFromBase64(base64);
     const link = document.createElement("a");
     link.href = wavUrl;
@@ -746,43 +805,86 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Tone Selection */}
-              <div className="mb-4">
-                <label className="text-xs text-slate-400 block mb-2 font-medium">
-                  Ruuxda Hadalka / النبرة والأسلوب:
+              {/* Emotion / Tone Selection */}
+              <div className="mb-5">
+                <label className="text-xs text-slate-400 block mb-2.5 font-medium flex items-center justify-between">
+                  <span>Muuqaalka & Mashruuca / المشاعر والنبرة (ميزة جديدة):</span>
+                  <span className="text-[10px] text-emerald-400 font-mono bg-emerald-500/10 px-1.5 py-0.5 rounded">8 Emotions</span>
                 </label>
-                <select
-                  value={tone}
-                  onChange={(e) => setTone(e.target.value)}
-                  className="w-full bg-slate-950/60 border border-white/10 rounded-xl p-2.5 text-xs text-slate-300 focus:outline-none focus:ring-1 focus:ring-emerald-500 cursor-pointer"
-                >
-                  <option value="natural">Dabiici / طبيعي وعادي</option>
-                  <option value="cheerful">Faraxsan / نبرة مبهجة وسعيدة</option>
-                  <option value="formal">Rami ah / أسلوب رسمي وقور</option>
-                  <option value="excited">Xamaasad leh / نبرة حماسية</option>
-                  <option value="slow">Tartiib / نبرة تعليمية هادئة</option>
-                </select>
-              </div>
-
-              {/* Speed Adjustment */}
-              <div>
-                <label className="text-xs text-slate-400 block mb-2 font-medium">
-                  Xawaaraha / سرعة النطق:
-                </label>
-                <div className="grid grid-cols-3 gap-1 bg-slate-950/60 p-1.5 rounded-xl border border-white/10">
-                  {["slow", "normal", "fast"].map((s) => (
+                <div className="grid grid-cols-2 gap-1.5">
+                  {EMOTIONS.map((emo) => (
                     <button
-                      key={s}
-                      onClick={() => setSpeed(s)}
-                      className={`text-[10px] py-1.5 rounded-lg capitalize transition cursor-pointer ${
-                        speed === s
-                          ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 font-semibold"
-                          : "text-slate-500 hover:text-slate-300 hover:bg-white/5"
+                      key={emo.id}
+                      type="button"
+                      onClick={() => setTone(emo.id)}
+                      className={`text-left p-2 rounded-xl border text-[11px] transition-all flex flex-col justify-between hover:scale-[1.01] active:scale-[0.99] cursor-pointer ${
+                        tone === emo.id
+                          ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300 font-medium shadow-lg shadow-emerald-500/5"
+                          : "bg-white/3 border-white/5 text-slate-400 hover:border-white/10 hover:bg-white/5"
                       }`}
+                      title={emo.desc}
                     >
-                      {s === "slow" ? "Tartiib" : s === "normal" ? "Normal" : "Degdeg"}
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm shrink-0">{emo.emoji}</span>
+                        <span className="font-semibold truncate">{emo.label.split("/")[0].trim()}</span>
+                      </div>
+                      <span className="text-[9px] text-slate-500 self-end mt-0.5">{emo.label.split("/")[1].trim()}</span>
                     </button>
                   ))}
+                </div>
+              </div>
+
+              {/* Speed Adjustment (Slider-based) */}
+              <div className="mt-4 pt-4 border-t border-white/5">
+                <div className="flex justify-between items-center mb-2">
+                  <label className="text-xs text-slate-400 font-medium">
+                    Xawaaraha Codka / سرعة نطق الصوت (شريطي):
+                  </label>
+                  <span className="text-xs font-bold font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                    {typeof speed === "number" ? speed.toFixed(2) : speed}x
+                  </span>
+                </div>
+                
+                <div className="space-y-3">
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="2.0"
+                    step="0.05"
+                    value={typeof speed === "number" ? speed : (speed === "slow" ? 0.75 : speed === "fast" ? 1.4 : 1.0)}
+                    onChange={(e) => setSpeed(parseFloat(e.target.value))}
+                    className="w-full h-1.5 bg-slate-950 rounded-lg appearance-none cursor-pointer accent-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                  
+                  {/* Min / Max Labels */}
+                  <div className="flex justify-between text-[9px] text-slate-500 font-mono">
+                    <span>0.5x (Aad u gaabis)</span>
+                    <span>1.0x (Caadi)</span>
+                    <span>2.0x (Aad u degdeg)</span>
+                  </div>
+
+                  {/* Fast Snap Presets */}
+                  <div className="grid grid-cols-4 gap-1 pt-0.5">
+                    {[
+                      { val: 0.65, label: "🐌 0.65x" },
+                      { val: 1.00, label: "🚶‍♂️ 1.00x" },
+                      { val: 1.35, label: "⚡ 1.35x" },
+                      { val: 1.70, label: "🚀 1.70x" }
+                    ].map((presetKey) => (
+                      <button
+                        key={presetKey.val}
+                        type="button"
+                        onClick={() => setSpeed(presetKey.val)}
+                        className={`text-[9px] py-1 rounded transition cursor-pointer border ${
+                          speed === presetKey.val
+                            ? "bg-emerald-500/25 text-emerald-300 border-emerald-500/30 font-bold"
+                            : "bg-slate-950/45 border-white/5 text-slate-400 hover:bg-white/5"
+                        }`}
+                      >
+                        {presetKey.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
